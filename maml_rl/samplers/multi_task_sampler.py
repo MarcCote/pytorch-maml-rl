@@ -262,7 +262,7 @@ class SamplerWorker(mp.Process):
                                                   device=device)
             train_episodes.log('_enqueueAt', datetime.now(timezone.utc))
             # QKFIX: Deep copy the episodes before sending them to their
-            # respective queues, to avoid a race condition. This issue would 
+            # respective queues, to avoid a race condition. This issue would
             # cause the policy pi = policy(observations) to be miscomputed for
             # some timesteps, which in turns makes the loss explode.
             self.train_queue.put((index, step, deepcopy(train_episodes)))
@@ -305,13 +305,18 @@ class SamplerWorker(mp.Process):
         return episodes
 
     def sample_trajectories(self, params=None):
-        observations = self.envs.reset()
+        _ = self.envs.reset()
+        _, _, _, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
         with torch.no_grad():
             while not self.envs.dones.all():
-                observations_tensor = torch.from_numpy(observations)
-                pi = self.policy(observations_tensor, params=params)
-                actions_tensor = pi.sample()
-                actions = actions_tensor.cpu().numpy()
+                observations = [info["feedback"] for info in infos["infos"]]
+
+                # TODO:
+                # observations_tensor = torch.from_numpy(observations)
+                # pi = self.policy(observations_tensor, params=params)
+                # actions_tensor = pi.sample()
+                # actions = actions_tensor.cpu().numpy()
+                actions = ["look"] * self.batch_size
 
                 new_observations, rewards, _, infos = self.envs.step(actions)
                 batch_ids = infos['batch_ids']
