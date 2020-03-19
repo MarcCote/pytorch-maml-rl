@@ -111,8 +111,11 @@ class BatchEpisodes(object):
                 observations, actions, rewards, batch_ids):
             if batch_id is None:
                 continue
-            self._observations_list[batch_id].append(observation.astype(np.float32))
-            self._actions_list[batch_id].append(action.astype(np.float32))
+            # self._observations_list[batch_id].append(observation.astype(np.float32))
+            # self._actions_list[batch_id].append(action.astype(np.float32))
+            # self._rewards_list[batch_id].append(reward.astype(np.float32))
+            self._observations_list[batch_id].append(observation)
+            self._actions_list[batch_id].append(action)
             self._rewards_list[batch_id].append(reward.astype(np.float32))
 
     @property
