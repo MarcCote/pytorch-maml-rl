@@ -308,30 +308,46 @@ class SamplerWorker(mp.Process): # need to pass the agent
         _ = self.envs.reset()
         _, _, _, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
         with torch.no_grad():
+            ######
+            ## Preprocess
+            # Initialize
+            prev_triplets, chosen_actions, prev_game_facts = [], [], []
+            prev_step_dones, prev_scores = []
+            for _ in range(self.batch_size):
+                prev_triplets.append([])
+                chosen_actions.append('tw-restart')
+                prev_game_facts.append(set())
+                prev_step_dones.append(0.0)
+                prev_scores.append(0.0)
+            ####
+            # Don't need Rl^2 here but just in case
+            meta_dones = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
+            meta_torch_step_rewards = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
+            meta_prev_h = to_pt(np.zeros((1, self.batch_size, self.agent.policy_net.block_hidden_dim)), enable_cuda=self.agent.use_cuda, type='float')
+            ####
+            observations = [info["feedback"] for info in infos["infos"]]
             while not self.envs.dones.all():
-                observations = [info["feedback"] for info in infos["infos"]]
-
-                ######
-                ## Preprocess
-                # obs_strings, current_triplets, acl, _, current_game_facts = agent.get_game_information_at_certain_step(obs, infos, prev_actions='tw-restart(?)', prev_facts=None)
-                # obs_strings = [item + " <sep> " + a for item, a in zip(obs_strings, chosen_actions)]
-                # value, chosen_actions, meta_prev_h, action_log_probs, chosen_indices, _, prev_h, prev_c = agent.act(agent.rollouts.ro_observation_list[step], agent.rollouts.ro_current_triplets[step], agent.rollouts.ro_action_candidate_list[step], meta_dones.unsqueeze(1), meta_torch_step_rewards.unsqueeze(1), meta_prev_h)
-                # chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
-                # chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(infos["admissible_commands"], chosen_indices, dones)]
+                observation_strings, current_triplets, action_candidate_list, _, current_game_facts = self.agent.get_game_information_at_certain_step(observations, infos, prev_actions=chosen_actions, prev_facts=None)
+                observation_strings = [item + " <sep> " + a for item, a in zip(observation_strings, chosen_actions)]
+                value, chosen_actions, meta_prev_h, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list, meta_dones.unsqueeze(1), meta_torch_step_rewards.unsqueeze(1), meta_prev_h)
+                chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
+                chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(infos["admissible_commands"], chosen_indices, dones)]
                 
                 ######
-
                 # TODO:
                 # observations_tensor = torch.from_numpy(observations) ## Do we realy want numpy? If so, i will need to demarcate inside the agent.act and essentialy write the function explicitly write here--easy
                 # pi = self.policy(observations_tensor, params=params)
                 # actions_tensor = pi.sample()
                 # actions = actions_tensor.cpu().numpy()
-                actions = ["look"] * self.batch_size
+                # actions = ["look"] * self.batch_size
+                actions = chosen_actions_before_parsing.cpu().numpy()
 
                 new_observations, rewards, _, infos = self.envs.step(actions)
                 batch_ids = infos['batch_ids']
                 yield (observations, actions, rewards, batch_ids)
                 observations = new_observations
+                prev_actions = chosen_actions_before_parsing
+                ## what about the dones? shouldn't env.step return it? do we have batch_ids?
 
     def run(self):
         while True:
