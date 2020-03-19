@@ -13,13 +13,13 @@ class Sampler(object):
                  env_name,
                  env_kwargs,
                  batch_size,
-                 policy,
+                 agent, #policy,
                  seed=None,
                  env=None):
         self.env_name = env_name
         self.env_kwargs = env_kwargs
         self.batch_size = batch_size
-        self.policy = policy
+        self.agent = agent # self.policy = policy
         self.seed = seed
 
         if env is None:

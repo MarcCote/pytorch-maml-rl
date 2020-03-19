@@ -45,6 +45,10 @@ class MultiTaskSampler(Sampler):
         The policy network for sampling. Note that the policy network is an
         instance of `torch.nn.Module` that takes observations as input and
         returns a distribution (typically `Normal` or `Categorical`).
+    agent : `TWr.agent.Agent`
+        The GATA agent with TWr/model.KG_Manipulation for sampling. Can we used for 
+        preprocessing as well as getting distributions of actions given
+        the observations.
 
     baseline : `maml_rl.baseline.LinearFeatureBaseline` instance
         The baseline. This baseline is an instance of `nn.Module`, with an
@@ -68,7 +72,7 @@ class MultiTaskSampler(Sampler):
                  env_name,
                  env_kwargs,
                  batch_size,
-                 policy,
+                 agent, #policy,
                  baseline,
                  env=None,
                  seed=None,
@@ -76,7 +80,7 @@ class MultiTaskSampler(Sampler):
         super(MultiTaskSampler, self).__init__(env_name,
                                                env_kwargs,
                                                batch_size,
-                                               policy,
+                                               agent, #policy,
                                                seed=seed,
                                                env=env)
 
@@ -85,7 +89,7 @@ class MultiTaskSampler(Sampler):
         self.task_queue = mp.JoinableQueue()
         self.train_episodes_queue = mp.Queue()
         self.valid_episodes_queue = mp.Queue()
-        policy_lock = mp.Lock()
+        agent_lock = mp.Lock() # policy_lock = mp.Lock()
 
         self.workers = [SamplerWorker(index,
                                       env_name,
@@ -93,13 +97,13 @@ class MultiTaskSampler(Sampler):
                                       batch_size,
                                       self.env.observation_space,
                                       self.env.action_space,
-                                      self.policy,
+                                      self.agent, # self.policy,
                                       deepcopy(baseline),
                                       self.seed,
                                       self.task_queue,
                                       self.train_episodes_queue,
                                       self.valid_episodes_queue,
-                                      policy_lock)
+                                      agent_lock) #policy_lock)
             for index in range(num_workers)]
 
         for worker in self.workers:
@@ -217,13 +221,13 @@ class SamplerWorker(mp.Process): # need to pass the agent
                  batch_size,
                  observation_space,
                  action_space,
-                 policy,
+                 agent, #policy,
                  baseline,
                  seed,
                  task_queue,
                  train_queue,
                  valid_queue,
-                 policy_lock):
+                 agent_lock) # policy_lock):
         super(SamplerWorker, self).__init__()
 
         env_fns = [make_env(env_name, env_kwargs=env_kwargs)
@@ -233,13 +237,13 @@ class SamplerWorker(mp.Process): # need to pass the agent
                                   action_space=action_space)
         self.envs.seed(None if (seed is None) else seed + index * batch_size)
         self.batch_size = batch_size
-        self.policy = policy
+        self.agent = agent # self.policy = policy
         self.baseline = baseline
 
         self.task_queue = task_queue
         self.train_queue = train_queue
         self.valid_queue = valid_queue
-        self.policy_lock = policy_lock
+        self.agent_lock = agent_lock # self.policy_lock = policy_lock
 
     def sample(self,
                index,
@@ -267,9 +271,9 @@ class SamplerWorker(mp.Process): # need to pass the agent
             # some timesteps, which in turns makes the loss explode.
             self.train_queue.put((index, step, deepcopy(train_episodes)))
 
-            with self.policy_lock:
-                loss = reinforce_loss(self.policy, train_episodes, params=params)
-                params = self.policy.update_params(loss,
+            with self.agent_lock: # self.policy_lock:
+                loss = reinforce_loss(self.agent, train_episodes, params=params) # self.policy, train_episodes, params=params)
+                params = self.agent.update_params(loss, #self.policy.update_params(loss,
                                                    params=params,
                                                    step_size=fast_lr,
                                                    first_order=True)

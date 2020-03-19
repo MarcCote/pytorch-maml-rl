@@ -12,8 +12,25 @@ from maml_rl.samplers import MultiTaskSampler
 from maml_rl.utils.helpers import get_policy_for_env, get_input_size
 from maml_rl.utils.reinforcement_learning import get_returns
 
+####
+# TWR imports
+from ppo_agent import Agent
+import generic
+import evaluate as evaluate
+import reinforcement_learning_dataset
+from generic import HistoryScoreCache, EpisodicCountingMemory
+from genric import to_pt
+
 
 def main(args):
+
+    ####
+    # TWR 
+    config = generic.load_config()
+    agent = Agent(config)
+    # output_dir = os.getenv('PT_OUTPUT_DIR', '/tmp') if agent.philly else "."
+    # data_dir = os.environ['PT_DATA_DIR'] if agent.philly else "."
+    ####
     with open(args.config, 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -35,25 +52,28 @@ def main(args):
     env.close()
 
     # Policy
-    policy = get_policy_for_env(env,
-                                hidden_sizes=config['hidden-sizes'],
-                                nonlinearity=config['nonlinearity'])
-    policy.share_memory()
+    # policy = get_policy_for_env(env,
+    #                            hidden_sizes=config['hidden-sizes'],
+    #                            nonlinearity=config['nonlinearity'])
+    # --replaced by agent
+
+    agent.share_memory() #policy.share_memory()
 
     # Baseline
-    baseline = LinearFeatureBaseline(get_input_size(env))
+    baseline = LinearFeatureBaseline(get_input_size(env)) ## input_size can agent.block_hidden_dim
+    
 
     # Sampler
     sampler = MultiTaskSampler(config['env-name'],
                                env_kwargs=config['env-kwargs'],
                                batch_size=config['fast-batch-size'],
-                               policy=policy,
+                               agent=agent, # policy=policy
                                baseline=baseline,
                                env=env,
                                seed=args.seed,
                                num_workers=args.num_workers)
 
-    metalearner = MAMLTRPO(policy,
+    metalearner = MAMLTRPO(agent, #policy,
                            fast_lr=config['fast-lr'],
                            first_order=config['first-order'],
                            device=args.device)
