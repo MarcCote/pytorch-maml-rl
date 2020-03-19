@@ -209,7 +209,7 @@ class MultiTaskSampler(Sampler):
         self.closed = True
 
 
-class SamplerWorker(mp.Process):
+class SamplerWorker(mp.Process): # need to pass the agent
     def __init__(self,
                  index,
                  env_name,
@@ -304,15 +304,25 @@ class SamplerWorker(mp.Process):
                                     normalize=True)
         return episodes
 
-    def sample_trajectories(self, params=None):
+    def sample_trajectories(self, params=None): # need to pass Agent() to the class?
         _ = self.envs.reset()
         _, _, _, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
         with torch.no_grad():
             while not self.envs.dones.all():
                 observations = [info["feedback"] for info in infos["infos"]]
 
+                ######
+                ## Preprocess
+                # obs_strings, current_triplets, acl, _, current_game_facts = agent.get_game_information_at_certain_step(obs, infos, prev_actions='tw-restart(?)', prev_facts=None)
+                # obs_strings = [item + " <sep> " + a for item, a in zip(obs_strings, chosen_actions)]
+                # value, chosen_actions, meta_prev_h, action_log_probs, chosen_indices, _, prev_h, prev_c = agent.act(agent.rollouts.ro_observation_list[step], agent.rollouts.ro_current_triplets[step], agent.rollouts.ro_action_candidate_list[step], meta_dones.unsqueeze(1), meta_torch_step_rewards.unsqueeze(1), meta_prev_h)
+                # chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
+                # chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(infos["admissible_commands"], chosen_indices, dones)]
+                
+                ######
+
                 # TODO:
-                # observations_tensor = torch.from_numpy(observations)
+                # observations_tensor = torch.from_numpy(observations) ## Do we realy want numpy? If so, i will need to demarcate inside the agent.act and essentialy write the function explicitly write here--easy
                 # pi = self.policy(observations_tensor, params=params)
                 # actions_tensor = pi.sample()
                 # actions = actions_tensor.cpu().numpy()
