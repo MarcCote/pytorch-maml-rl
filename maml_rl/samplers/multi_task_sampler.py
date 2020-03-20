@@ -35,16 +35,18 @@ class MultiTaskSampler(Sampler):
         Name of the environment. This environment should be an environment
         registered through `gym`. See `maml.envs`.
 
-    env_kwargs : dict
-        Additional keywork arguments to be added when creating the environment.
+    ~env_kwargs : dict
+        Additional keywork arguments to be added when creating the environment.~
+     We don't have kwargs or tw-env
 
     batch_size : int
         Number of trajectories to sample from each task (ie. `fast_batch_size`).
 
-    policy : `maml_rl.policies.Policy` instance
+    ~policy : `maml_rl.policies.Policy` instance
         The policy network for sampling. Note that the policy network is an
         instance of `torch.nn.Module` that takes observations as input and
-        returns a distribution (typically `Normal` or `Categorical`).
+        returns a distribution (typically `Normal` or `Categorical`).~
+
     agent : `TWr.agent.Agent`
         The GATA agent with TWr/model.KG_Manipulation for sampling. Can we used for 
         preprocessing as well as getting distributions of actions given
@@ -70,7 +72,7 @@ class MultiTaskSampler(Sampler):
     """
     def __init__(self,
                  env_name,
-                 env_kwargs,
+                 #env_kwargs,
                  batch_size,
                  agent, #policy,
                  baseline,
@@ -78,7 +80,7 @@ class MultiTaskSampler(Sampler):
                  seed=None,
                  num_workers=1):
         super(MultiTaskSampler, self).__init__(env_name,
-                                               env_kwargs,
+                                               #env_kwargs,
                                                batch_size,
                                                agent, #policy,
                                                seed=seed,
@@ -93,7 +95,7 @@ class MultiTaskSampler(Sampler):
 
         self.workers = [SamplerWorker(index,
                                       env_name,
-                                      env_kwargs,
+                                      #env_kwargs,
                                       batch_size,
                                       self.env.observation_space,
                                       self.env.action_space,
@@ -217,7 +219,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
     def __init__(self,
                  index,
                  env_name,
-                 env_kwargs,
+                 #env_kwargs,
                  batch_size,
                  observation_space,
                  action_space,
@@ -230,7 +232,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
                  agent_lock): # policy_lock):
         super(SamplerWorker, self).__init__()
 
-        env_fns = [make_env(env_name, env_kwargs=env_kwargs)
+        env_fns = [make_env(env_name) #, env_kwargs=env_kwargs)
                    for _ in range(batch_size)]
         self.envs = SyncVectorEnv(env_fns,
                                   observation_space=observation_space,

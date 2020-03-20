@@ -1,8 +1,8 @@
 import gym
 
-def make_env(env_name, env_kwargs={}, seed=None):
+def make_env(env_name, seed=None): #def make_env(env_name, env_kwargs={}, seed=None): - we don't have kwargs for tw-env
     def _make_env():
-        env = gym.make(env_name, **env_kwargs)
+        env = gym.make(env_name) #env = gym.make(env_name, **env_kwargs) -- we don't have kwargs for tw-env
         if hasattr(env, 'seed'):
             env.seed(seed)
         return env
@@ -11,19 +11,19 @@ def make_env(env_name, env_kwargs={}, seed=None):
 class Sampler(object):
     def __init__(self,
                  env_name,
-                 env_kwargs,
+                 # env_kwargs, -- we don't have kwargs for tw-env
                  batch_size,
                  agent, #policy,
                  seed=None,
                  env=None):
         self.env_name = env_name
-        self.env_kwargs = env_kwargs
+        # self.env_kwargs = env_kwargs - we don't have kwargs for tw-env
         self.batch_size = batch_size
         self.agent = agent # self.policy = policy
         self.seed = seed
 
         if env is None:
-            env = gym.make(env_name, **env_kwargs)
+            env = gym.make(env_name) # env = gym.make(env_name, **env_kwargs) -- we don't have kwargs for tw-env
         self.env = env
         if hasattr(self.env, 'seed'):
             self.env.seed(seed)

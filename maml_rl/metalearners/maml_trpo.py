@@ -48,11 +48,11 @@ class MAMLTRPO(GradientBasedMetaLearner):
            Machine Learning (ICML) (https://arxiv.org/abs/1502.05477)
     """
     def __init__(self,
-                 policy,
+                 agent, #policy,
                  fast_lr=0.5,
                  first_order=False,
                  device='cpu'):
-        super(MAMLTRPO, self).__init__(policy, device=device)
+        super(MAMLTRPO, self).__init__(agent, device=device) # policy, device=device)
         self.fast_lr = fast_lr
         self.first_order = first_order
 
@@ -62,10 +62,10 @@ class MAMLTRPO(GradientBasedMetaLearner):
         # Loop over the number of steps of adaptation
         params = None
         for futures in train_futures:
-            inner_loss = reinforce_loss(self.policy,
+            inner_loss = reinforce_loss(self.agent, #self.policy,
                                         await futures,
                                         params=params)
-            params = self.policy.update_params(inner_loss,
+            params = self.agent.policy_net.update_params(inner_loss, #self.policy.update_params(inner_loss,
                                                params=params,
                                                step_size=self.fast_lr,
                                                first_order=first_order)
@@ -73,14 +73,14 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
     def hessian_vector_product(self, kl, damping=1e-2):
         grads = torch.autograd.grad(kl,
-                                    self.policy.parameters(),
+                                    self.agent.policy_net.parameters(), # self.policy.parameters(),
                                     create_graph=True)
         flat_grad_kl = parameters_to_vector(grads)
 
         def _product(vector, retain_graph=True):
             grad_kl_v = torch.dot(flat_grad_kl, vector)
             grad2s = torch.autograd.grad(grad_kl_v,
-                                         self.policy.parameters(),
+                                         self.agent.policy_net.parameters(), #self.policy.parameters(),
                                          retain_graph=retain_graph)
             flat_grad2_kl = parameters_to_vector(grad2s)
 
