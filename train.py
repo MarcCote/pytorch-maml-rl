@@ -14,20 +14,24 @@ from maml_rl.utils.reinforcement_learning import get_returns
 
 ####
 # TWR imports
+import sys
+sys.path.append("/data0/adadhika/ash_ppo_TWR/")
 from ppo_agent import Agent
 import generic
 import evaluate as evaluate
 import reinforcement_learning_dataset
 from generic import HistoryScoreCache, EpisodicCountingMemory
-from genric import to_pt
-
+from generic import to_pt
 
 def main(args):
 
     ####
-    # TWR 
-    config = generic.load_config()
-    agent = Agent(config)
+    # TWR
+    with open(args.twconfig) as reader:
+        twconfig = yaml.safe_load(reader)
+    #twconfig = args.twconfig
+    #twconfig = generic.load_config()
+    agent = Agent(twconfig)
     # output_dir = os.getenv('PT_OUTPUT_DIR', '/tmp') if agent.philly else "."
     # data_dir = os.environ['PT_DATA_DIR'] if agent.philly else "."
     ####
@@ -48,6 +52,8 @@ def main(args):
         torch.manual_seed(args.seed)
         torch.cuda.manual_seed_all(args.seed)
 
+    import pdb
+    pdb.set_trace()
     env = gym.make(config['env-name'], **config['env-kwargs'])
     env.close()
 
@@ -56,12 +62,14 @@ def main(args):
     #                            hidden_sizes=config['hidden-sizes'],
     #                            nonlinearity=config['nonlinearity'])
     # --replaced by agent
-
-    agent.share_memory() #policy.share_memory()
+    import pdb
+    pdb.set_trace()
+    agent.policy_net.share_memory() #policy.share_memory()
+    pdb.set_trace()
 
     # Baseline
     baseline = LinearFeatureBaseline(get_input_size(env)) ## input_size can agent.block_hidden_dim
-    
+    pdb.set_trace()
 
     # Sampler
     sampler = MultiTaskSampler(config['env-name'],
@@ -72,7 +80,7 @@ def main(args):
                                env=env,
                                seed=args.seed,
                                num_workers=args.num_workers)
-
+    pdb.set_trace()
     metalearner = MAMLTRPO(agent, #policy,
                            fast_lr=config['fast-lr'],
                            first_order=config['first-order'],
@@ -131,7 +139,13 @@ if __name__ == '__main__':
         help='use cuda (default: false, use cpu). WARNING: Full upport for cuda '
         'is not guaranteed. Using CPU is encouraged.')
 
+    # TW
+    tw_args = parser.add_argument_group('TextWorld')
+    tw_args.add_argument('--twconfig', type=str, required=True, help='parth to the textworld config file')
+    tw_args.add_argument("-p", "--params", nargs="+", metavar="my.setting=value", default=[], help="override params of the config file, e.g. -p 'training.gamma=0.95'")
+
     args = parser.parse_args()
+
     args.device = ('cuda' if (torch.cuda.is_available()
                    and args.use_cuda) else 'cpu')
 

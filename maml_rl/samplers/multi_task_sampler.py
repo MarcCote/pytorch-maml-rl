@@ -227,7 +227,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
                  task_queue,
                  train_queue,
                  valid_queue,
-                 agent_lock) # policy_lock):
+                 agent_lock): # policy_lock):
         super(SamplerWorker, self).__init__()
 
         env_fns = [make_env(env_name, env_kwargs=env_kwargs)
