@@ -330,7 +330,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
 
     def sample_trajectories(self, params=None): # need to pass Agent() to the class?
         _ = self.envs.reset()
-        _, _, _, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
+        _, _, dones, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
         import pdb
         print(infos['infos'][0].keys())
         with torch.no_grad():
@@ -356,11 +356,11 @@ class SamplerWorker(mp.Process): # need to pass the agent
                 observations = [info["feedback"] for info in infos["infos"]]
                 info_for_agent = [info for info in infos["infos"]]
                 print("LENG : " + str(len(info_for_agent)))
-                observation_strings, current_triplets, action_candidate_list, _, current_game_facts = self.agent.get_game_info_at_certain_step_maml(info_for_agent, prev_actions=chosen_actions, prev_facts=None)
+                observation_strings, current_triplets, action_candidate_list, dict_info_for_agent, _, current_game_facts = self.agent.get_game_info_at_certain_step_maml(info_for_agent, prev_actions=chosen_actions, prev_facts=None)
                 observation_strings = [item + " <sep> " + a for item, a in zip(observation_strings, chosen_actions)]
                 value, chosen_actions, meta_prev_h, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list, meta_dones.unsqueeze(1), meta_torch_step_rewards.unsqueeze(1), meta_prev_h)
                 chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
-                chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(infos["admissible_commands"], chosen_indices, dones)]
+                chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(dict_info_for_agent["admissible_commands"], chosen_indices, dones)]
                 
                 ######
                 # TODO:
@@ -369,14 +369,13 @@ class SamplerWorker(mp.Process): # need to pass the agent
                 # actions_tensor = pi.sample()
                 # actions = actions_tensor.cpu().numpy()
                 # actions = ["look"] * self.batch_size
-                actions = chosen_actions_before_parsing.cpu().numpy()
+                #actions = chosen_actions_before_parsing.cpu().numpy()
 
-                new_observations, rewards, _, infos = self.envs.step(actions)
+                new_observations, rewards, dones, infos = self.envs.step(chosen_actions_before_parsing)
                 batch_ids = infos['batch_ids']
-                yield (observations, actions, rewards, batch_ids)
+                yield (observations, chosen_actions_before_parsing, rewards, batch_ids)
                 observations = new_observations
                 prev_actions = chosen_actions_before_parsing
-                ## what about the dones? shouldn't env.step return it? do we have batch_ids?
 
     def run(self):
         while True:
