@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.multiprocessing as mp
 import asyncio
@@ -11,6 +12,7 @@ from maml_rl.samplers.sampler import Sampler, make_env
 from maml_rl.envs.utils.sync_vector_env import SyncVectorEnv
 from maml_rl.episode import BatchEpisodes
 from maml_rl.utils.reinforcement_learning import reinforce_loss
+from generic import to_pt
 
 
 def _create_consumer(queue, futures, loop=None):
@@ -20,6 +22,8 @@ def _create_consumer(queue, futures, loop=None):
         data = queue.get()
         if data is None:
             break
+        import pdb
+        #pdb.set_trace()
         index, step, episodes = data
         future = futures if (step is None) else futures[step]
         if not future[index].cancelled():
@@ -92,6 +96,8 @@ class MultiTaskSampler(Sampler):
         self.train_episodes_queue = mp.Queue()
         self.valid_episodes_queue = mp.Queue()
         agent_lock = mp.Lock() # policy_lock = mp.Lock()
+        import pdb
+        #pdb.set_trace()
 
         self.workers = [SamplerWorker(index,
                                       env_name,
@@ -107,7 +113,8 @@ class MultiTaskSampler(Sampler):
                                       self.valid_episodes_queue,
                                       agent_lock) #policy_lock)
             for index in range(num_workers)]
-
+        import pdb
+        #pdb.set_trace()
         for worker in self.workers:
             worker.daemon = True
             worker.start()
@@ -118,6 +125,8 @@ class MultiTaskSampler(Sampler):
         self._valid_consumer_thread = None
 
     def sample_tasks(self, num_tasks):
+        import pdb
+        #pdb.set_trace()
         return self.env.unwrapped.sample_tasks(num_tasks)
 
     def sample_async(self, tasks, **kwargs):
@@ -127,13 +136,19 @@ class MultiTaskSampler(Sampler):
                                'to complete. Please call `sample_wait` '
                                'before calling `sample_async` again.')
 
+        import pdb
+        #pdb.set_trace()
         for index, task in enumerate(tasks):
             self.task_queue.put((index, task, kwargs))
-
+        import pdb
+        #pdb.set_trace()
         num_steps = kwargs.get('num_steps', 1)
         futures = self._start_consumer_threads(tasks,
                                                num_steps=num_steps)
+        #pdb.set_trace()
         self._waiting_sample = True
+        print(torch.multiprocessing.current_process())
+        print("Hello from Sample async")
         return futures
 
     def sample_wait(self, episodes_futures):
@@ -171,6 +186,8 @@ class MultiTaskSampler(Sampler):
 
     def _start_consumer_threads(self, tasks, num_steps=1):
         # Start train episodes consumer thread
+        import pdb
+        #pdb.set_trace()
         train_episodes_futures = [[self._event_loop.create_future() for _ in tasks]
                                   for _ in range(num_steps)]
         self._train_consumer_thread = threading.Thread(target=_create_consumer,
@@ -260,6 +277,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
         # `first_order=True` no matter if the second order version of MAML is
         # applied since this is only used for sampling trajectories, and not
         # for optimization.
+        print("Hi " + str(torch.multiprocessing.current_process()))
         params = None
         for step in range(num_steps):
             train_episodes = self.create_episodes(params=params,
@@ -313,12 +331,14 @@ class SamplerWorker(mp.Process): # need to pass the agent
     def sample_trajectories(self, params=None): # need to pass Agent() to the class?
         _ = self.envs.reset()
         _, _, _, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
+        import pdb
+        print(infos['infos'][0].keys())
         with torch.no_grad():
             ######
             ## Preprocess
             # Initialize
             prev_triplets, chosen_actions, prev_game_facts = [], [], []
-            prev_step_dones, prev_scores = []
+            prev_step_dones, prev_scores = [], []
             for _ in range(self.batch_size):
                 prev_triplets.append([])
                 chosen_actions.append('tw-restart')
@@ -331,9 +351,12 @@ class SamplerWorker(mp.Process): # need to pass the agent
             meta_torch_step_rewards = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
             meta_prev_h = to_pt(np.zeros((1, self.batch_size, self.agent.policy_net.block_hidden_dim)), enable_cuda=self.agent.use_cuda, type='float')
             ####
-            observations = [info["feedback"] for info in infos["infos"]]
             while not self.envs.dones.all():
-                observation_strings, current_triplets, action_candidate_list, _, current_game_facts = self.agent.get_game_information_at_certain_step(observations, infos, prev_actions=chosen_actions, prev_facts=None)
+                print(infos["infos"][0]["admissible_commands"])
+                observations = [info["feedback"] for info in infos["infos"]]
+                info_for_agent = [info for info in infos["infos"]]
+                print("LENG : " + str(len(info_for_agent)))
+                observation_strings, current_triplets, action_candidate_list, _, current_game_facts = self.agent.get_game_info_at_certain_step_maml(info_for_agent, prev_actions=chosen_actions, prev_facts=None)
                 observation_strings = [item + " <sep> " + a for item, a in zip(observation_strings, chosen_actions)]
                 value, chosen_actions, meta_prev_h, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list, meta_dones.unsqueeze(1), meta_torch_step_rewards.unsqueeze(1), meta_prev_h)
                 chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
@@ -358,13 +381,15 @@ class SamplerWorker(mp.Process): # need to pass the agent
     def run(self):
         while True:
             data = self.task_queue.get()
-
+            print("Hey from run sw")
+            import pdb
             if data is None:
                 self.envs.close()
                 self.task_queue.task_done()
                 break
 
             index, task, kwargs = data
+            print(data)
             self.envs.reset_task(task)
             self.sample(index, **kwargs)
             self.task_queue.task_done()
