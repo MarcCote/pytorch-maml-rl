@@ -44,11 +44,14 @@ class LinearFeatureBaseline(nn.Module):
 
     def fit(self, episodes):
         # sequence_length * batch_size x feature_size
-        featmat = self._feature(episodes).view(-1, self.feature_size)
+        # featmat = self._feature(episodes).view(-1, self.feature_size)
         # sequence_length * batch_size x 1
-        returns = episodes.returns.view(-1, 1)
 
+        #featmat = self.agent.model()
+        returns = episodes.returns.view(-1, 1)
+        print("RETRNS" + str(returns))
         reg_coeff = self._reg_coeff
+
         XT_y = torch.matmul(featmat.t(), returns)
         XT_X = torch.matmul(featmat.t(), featmat)
         for _ in range(5):

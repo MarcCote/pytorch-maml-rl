@@ -11,6 +11,8 @@ class BatchEpisodes(object):
         self.device = device
 
         self._observations_list = [[] for _ in range(batch_size)]
+        self._triplets_list = [[] for _ in range(batch_size)]
+        self._candidates = [[] for _ in range(batch_size)]
         self._actions_list = [[] for _ in range(batch_size)]
         self._rewards_list = [[] for _ in range(batch_size)]
 
@@ -40,7 +42,7 @@ class BatchEpisodes(object):
 
     @property
     def observations(self):
-        if self._observations is None:
+        '''if self._observations is None:
             observation_shape = self._observations_list[0][0].shape
             observations = np.zeros((len(self), self.batch_size) + observation_shape,
                                     dtype=np.float32)
@@ -50,6 +52,9 @@ class BatchEpisodes(object):
                          axis=0,
                          out=observations[:length, i])
             self._observations = torch.as_tensor(observations, device=self.device)
+            del self._observations_list'''
+        if self._observations is None:
+            self._observations = self._observations_list
             del self._observations_list
         return self._observations
 
@@ -107,16 +112,22 @@ class BatchEpisodes(object):
         return self._advantages
 
     def append(self, observations, actions, rewards, batch_ids):
-        for observation, action, reward, batch_id in zip(
-                observations, actions, rewards, batch_ids):
+        for observation, triplet, candidate, action, reward, batch_id in zip(
+                observations, triplets, candidates, actions, rewards, batch_ids):
             if batch_id is None:
                 continue
             # self._observations_list[batch_id].append(observation.astype(np.float32))
             # self._actions_list[batch_id].append(action.astype(np.float32))
             # self._rewards_list[batch_id].append(reward.astype(np.float32))
+            #print("HEY-single obs in batch" + str(batch_id))
+            #print("OBS: " + str(observation))
+            #print("ACT: " + str(action))
             self._observations_list[batch_id].append(observation)
+            self._triplets_list[batch_id].append(triplet)
+            self._candidates_list[batch_id].append(candidate)
             self._actions_list[batch_id].append(action)
             self._rewards_list[batch_id].append(reward.astype(np.float32))
+            print("in appeend")
 
     @property
     def logs(self):
