@@ -12,14 +12,18 @@ class BatchEpisodes(object):
 
         self._observations_list = [[] for _ in range(batch_size)]
         self._triplets_list = [[] for _ in range(batch_size)]
-        self._candidates = [[] for _ in range(batch_size)]
+        self._candidates_list = [[] for _ in range(batch_size)]
         self._actions_list = [[] for _ in range(batch_size)]
         self._rewards_list = [[] for _ in range(batch_size)]
+        self._chosen_indices_list = [[] for _ in range(batch_size)]
 
         self._observation_shape = None
         self._action_shape = None
 
         self._observations = None
+        self._triplets = None
+        self._chosen_indices = None
+        self._candidates = None
         self._actions = None
         self._rewards = None
         self._returns = None
@@ -55,10 +59,41 @@ class BatchEpisodes(object):
             del self._observations_list'''
         if self._observations is None:
             self._observations = self._observations_list
+            print(len(self._observations))
+            print(len(self._observations[0]))
             del self._observations_list
         return self._observations
 
     @property
+    def actions(self):
+        if self._actions is None:
+            self._actions = self._actions_list
+            del self._actions_list
+        return self._actions
+
+    @property
+    def chosen_indices(self):
+        if self._chosen_indices is None:
+            self._chosen_indices = self._chosen_indices_list
+            del self._chosen_indices_list
+        return self._chosen_indices
+        
+
+    @property
+    def triplets(self):
+        if self._triplets is None:
+            self._triplets = self._triplets_list
+            del self._triplets_list
+        return self._triplets
+
+    @property
+    def candidates(self):
+        if self._candidates is None:
+            self._candidates = self._candidates_list
+            del self._candidates_list
+        return self._candidates
+
+    '''@property
     def actions(self):
         if self._actions is None:
             action_shape = self._actions_list[0][0].shape
@@ -69,7 +104,7 @@ class BatchEpisodes(object):
                 np.stack(self._actions_list[i], axis=0, out=actions[:length, i])
             self._actions = torch.as_tensor(actions, device=self.device)
             del self._actions_list
-        return self._actions
+        return self._actions'''
 
     @property
     def rewards(self):
@@ -111,9 +146,9 @@ class BatchEpisodes(object):
                              'to compute and store the advantages in `episodes`.')
         return self._advantages
 
-    def append(self, observations, actions, rewards, batch_ids):
-        for observation, triplet, candidate, action, reward, batch_id in zip(
-                observations, triplets, candidates, actions, rewards, batch_ids):
+    def append(self, observations, triplets, candidates, actions, chosen_indices, rewards, batch_ids):
+        for observation, triplet, candidate, action, chosen_index, reward, batch_id in zip(
+                observations, triplets, candidates, actions, chosen_indices, rewards, batch_ids):
             if batch_id is None:
                 continue
             # self._observations_list[batch_id].append(observation.astype(np.float32))
@@ -126,6 +161,7 @@ class BatchEpisodes(object):
             self._triplets_list[batch_id].append(triplet)
             self._candidates_list[batch_id].append(candidate)
             self._actions_list[batch_id].append(action)
+            self._chosen_indices_list[batch_id].append(chosen_index)
             self._rewards_list[batch_id].append(reward.astype(np.float32))
             print("in appeend")
 
@@ -137,10 +173,13 @@ class BatchEpisodes(object):
         self._logs[key] = value
 
     def compute_advantages(self, baseline, gae_lambda=1.0, normalize=True):
+        print("maks-shape" + str(self.mask.shape))
         # Compute the values based on the baseline
-        values = baseline(self).detach()
+        values = baseline(self).detach().t() # not sure if this should be reshaped/ t()
         # Add an additional 0 at the end of values for
         # the estimation at the end of the episode
+        print("values shape" + str(values.shape))
+        print("rewards shape "  + str(self.rewards.shape))
         values = F.pad(values * self.mask, (0, 0, 0, 1))
 
         # Compute the advantages based on the values

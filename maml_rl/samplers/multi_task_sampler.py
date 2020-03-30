@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 import torch.multiprocessing as mp
-mp.set_start_method('spawn')
+#mp.set_start_method('forkserver', force=True)
+#mp.set_start_method('spawn')
 import asyncio
 import threading
 import time
@@ -14,7 +15,7 @@ from maml_rl.envs.utils.sync_vector_env import SyncVectorEnv
 from maml_rl.episode import BatchEpisodes
 from maml_rl.utils.reinforcement_learning import reinforce_loss
 from generic import to_pt
-
+torch.set_num_threads(1)
 
 def _create_consumer(queue, futures, loop=None):
     if loop is None:
@@ -116,7 +117,7 @@ class MultiTaskSampler(Sampler):
             for index in range(num_workers)]
         import pdb
         #pdb.set_trace()
-        pdb.set_trace()
+        #pdb.set_trace()
         for worker in self.workers:
             worker.daemon = True
             worker.start()
@@ -140,12 +141,12 @@ class MultiTaskSampler(Sampler):
                                'before calling `sample_async` again.')
 
         import pdb
-        pdb.set_trace()
+        #pdb.set_trace()
         for index, task in enumerate(tasks):
             self.task_queue.put((index, task, kwargs))
-            pdb.set_trace()
+            #pdb.set_trace()
         import pdb
-        pdb.set_trace()
+        #pdb.set_trace()
         num_steps = kwargs.get('num_steps', 1)
         futures = self._start_consumer_threads(tasks,
                                                num_steps=num_steps)
@@ -337,12 +338,12 @@ class SamplerWorker(mp.Process): # need to pass the agent
         print(len(episodes._observations_list))
         print(len(episodes._observations_list[0]))
         print(episodes._observations_list[0])
-        import pdb
-        pdb.set_trace()
         self.baseline.fit(episodes)
+        print("I just fit!")
         episodes.compute_advantages(self.baseline,
                                     gae_lambda=gae_lambda,
                                     normalize=True)
+        print("I just computed the ads")
         return episodes
 
     def sample_trajectories(self, params=None): # need to pass Agent() to the class?
@@ -364,9 +365,9 @@ class SamplerWorker(mp.Process): # need to pass the agent
                 prev_scores.append(0.0)
             ####
             # Don't need Rl^2 here but just in case
-            meta_dones = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
-            meta_torch_step_rewards = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
-            meta_prev_h = to_pt(np.zeros((1, self.batch_size, self.agent.policy_net.block_hidden_dim)), enable_cuda=self.agent.use_cuda, type='float')
+            #meta_dones = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
+            #meta_torch_step_rewards = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
+            #meta_prev_h = to_pt(np.zeros((1, self.batch_size, self.agent.policy_net.block_hidden_dim)), enable_cuda=self.agent.use_cuda, type='float')
             ####
             print("Before qhile loo")
             while not self.envs.dones.all():
@@ -377,11 +378,13 @@ class SamplerWorker(mp.Process): # need to pass the agent
                 print("Hey after get game info")
                 observation_strings = [item + " <sep> " + a for item, a in zip(observation_strings, chosen_actions)]
                 print("just before acting")
-                value, chosen_actions, meta_prev_h, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list, meta_dones.unsqueeze(1), meta_torch_step_rewards.unsqueeze(1), meta_prev_h)
+                value, chosen_actions, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list)
                 print("after acting")
                 chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
                 chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(dict_info_for_agent["admissible_commands"], chosen_indices, dones)]
-                print("after choosing actions") 
+                print(chosen_actions_before_parsing)
+                print(chosen_indices)
+                print("after choosing actions")
                 ######
                 # TODO:
                 # observations_tensor = torch.from_numpy(observations) ## Do we realy want numpy? If so, i will need to demarcate inside the agent.act and essentialy write the function explicitly write here--easy
@@ -393,7 +396,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
 
                 new_observations, rewards, dones, infos = self.envs.step(chosen_actions_before_parsing)
                 batch_ids = infos['batch_ids']
-                yield (observations, chosen_actions_before_parsing, rewards, batch_ids)
+                yield (observations, current_triplets, action_candidate_list, chosen_actions_before_parsing, chosen_indices, rewards, batch_ids)
                 observations = new_observations
                 prev_actions = chosen_actions_before_parsing
 
