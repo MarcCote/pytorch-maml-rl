@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn.functional as F
 from torch.nn.utils.convert_parameters import parameters_to_vector
 from torch.distributions.kl import kl_divergence
 
@@ -94,8 +94,78 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
         with torch.set_grad_enabled(old_pi is None):
             valid_episodes = await valid_futures
-            pi = self.policy(valid_episodes.observations, params=params)
+            if params is not None: # can make a function
+                model_dict = self.agent.policy_net.state_dict()
+                inner_loop_params = {k: v for k, v in params.items() if k in model_dict}
+                model_dict.update(inner_loop_params)
+                self.agent.policy_net.load_state_dict(model_dict)
 
+            ######
+            ## can go in a function in ppo_agent.py
+            valid_obs_str = valid_episodes.observations
+            valid_triplets = valid_episodes.triplets
+            valid_acl = valid_episodes.candidates
+            valid_ads = valid_episodes.advantages
+            valid_chosen_indices = valid_episodes.chosen_indices
+            valid_episode_lengths = valid_episodes.lengths
+            valid_max_eps_length = len(valid_episodes)
+
+            #old_log_probs, new_log_probs = [], []
+            ratios, kls = [], []
+            for i in range(valid_episodes.batch_size):
+                h_og, obs_mask, h_go, node_mask = self.agent.encode(valid_obs_str[i], valid_triplets[i], use_model='policy')
+                action_features, value, action_masks, new_h, new_c = self.agent.action_scoring(valid_acl[i], h_og, obs_mask, h_go, node_mask, use_model='policy')
+                #print('action_features.shape : ')
+                #print(action_features.shape)
+                #print('AF')
+                #print(action_features)
+
+                pi = self.agent.policy_net.dist(probs=action_features)
+                if old_pi is None:
+                    old_pi_ = detach_distribution(pi)
+                else:
+                    old_pi_ = old_pi
+
+                for j in range(len(valid_chosen_indices[i])):
+                    valid_chosen_indices[i][j] = valid_chosen_indices[i][j].unsqueeze(0)
+
+                #new_log_prob = pi.log_prob(torch.cat(valid_chosen_indices[i])).reshape(len(valid_episodes), -1)
+                #old_log_prob = old_pi_.log_prob(torch.cat(valid_chosen_indices[i])).reshape(len(valid_episodes), -1)
+
+                unpadded_new_log_prob = pi.log_prob(torch.cat(valid_chosen_indices[i]))
+                unpadded_old_log_prob = old_pi_.log_prob(torch.cat(valid_chosen_indices[i]))
+
+                padded_new_log_prob = F.pad(unpadded_new_log_prob, (0, valid_max_eps_length-valid_episode_lengths[i])).reshape(len(valid_episodes), -1)
+                padded_old_log_prob = F.pad(unpadded_old_log_prob, (0, valid_max_eps_length-valid_episode_lengths[i])).reshape(len(valid_episodes), -1)
+
+                #print(kl_divergence(pi, old_pi_))
+                #print(kl_divergence(pi, old_pi_).shape)
+                log_ratio = padded_new_log_prob - padded_old_log_prob
+                ratios.append(torch.exp(log_ratio))
+                kls.append(F.pad(kl_divergence(pi, old_pi_), (0, valid_max_eps_length-valid_episode_lengths[i])))
+                print('KLS')
+                #print(kls.shape)
+
+            #print("KLS")
+            #print(kls)
+            #print(type(kls[0]))
+            #print(kls[0].shape)
+            torch_kls = torch.cat(kls, 0).reshape(len(valid_episodes), valid_episodes.batch_size)
+
+            torch_ratios = torch.cat(ratios, 0).reshape(len(valid_episodes), valid_episodes.batch_size)
+            losses = -weighted_mean(torch_ratios * valid_episodes.advantages, lengths=valid_episodes.lengths)
+
+            kls = weighted_mean(torch_kls, lengths=valid_episodes.lengths)
+            old_pi = old_pi_
+
+            '''#return losses.mean(), kls.mean(), old_pi
+                
+
+            pi = torch.cat(pi, 0) 
+            print(pi.shape)
+                
+            #pi = self.policy(valid_episodes.observations, params=params)
+            #######
             if old_pi is None:
                 old_pi = detach_distribution(pi)
 
@@ -106,7 +176,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
             losses = -weighted_mean(ratio * valid_episodes.advantages,
                                     lengths=valid_episodes.lengths)
             kls = weighted_mean(kl_divergence(pi, old_pi),
-                                lengths=valid_episodes.lengths)
+                                lengths=valid_episodes.lengths)'''
 
         return losses.mean(), kls.mean(), old_pi
 

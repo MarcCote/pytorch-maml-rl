@@ -298,7 +298,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
 
             with self.agent_lock: # self.policy_lock:
                 loss = reinforce_loss(self.agent, train_episodes, params=params) # self.policy, train_episodes, params=params)
-                params = self.agent.update_params(loss, #self.policy.update_params(loss,
+                params = self.agent.policy_net.update_params(loss, #self.policy.update_params(loss,
                                                    params=params,
                                                    step_size=fast_lr,
                                                    first_order=True)
@@ -326,24 +326,24 @@ class SamplerWorker(mp.Process): # need to pass the agent
         print("create episode")
         for item in self.sample_trajectories(params=params):
             episodes.append(*item)
-            print("obs len")
-            print(len(episodes._observations_list[-1]))
-        print("Hey1Hey1Hey1")
-        print(len(episodes._observations_list))
-        print("Yo1")
-        print([len(elem) for elem in episodes._observations_list])
-        print(episodes._observations_list[-1])
+            #print("obs len")
+            #print(len(episodes._observations_list[-1]))
+        #print("Hey1Hey1Hey1")
+        #print(len(episodes._observations_list))
+        #print("Yo1")
+        #print([len(elem) for elem in episodes._observations_list])
+        #print(episodes._observations_list[-1])
         episodes.log('duration', time.time() - t0)
-        print("HeyHeyHey")
-        print(len(episodes._observations_list))
-        print(len(episodes._observations_list[0]))
-        print(episodes._observations_list[0])
+        #print("HeyHeyHey")
+        #print(len(episodes._observations_list))
+        #print(len(episodes._observations_list[0]))
+        #print(episodes._observations_list[0])
         self.baseline.fit(episodes)
-        print("I just fit!")
+        #print("I just fit!")
         episodes.compute_advantages(self.baseline,
                                     gae_lambda=gae_lambda,
                                     normalize=True)
-        print("I just computed the ads")
+        #print("I just computed the ads")
         return episodes
 
     def sample_trajectories(self, params=None): # need to pass Agent() to the class?
@@ -369,22 +369,22 @@ class SamplerWorker(mp.Process): # need to pass the agent
             #meta_torch_step_rewards = to_pt(np.zeros(self.batch_size), enable_cuda=self.agent.use_cuda, type='float')
             #meta_prev_h = to_pt(np.zeros((1, self.batch_size, self.agent.policy_net.block_hidden_dim)), enable_cuda=self.agent.use_cuda, type='float')
             ####
-            print("Before qhile loo")
+            #print("Before qhile loo")
             while not self.envs.dones.all():
-                print("Just enetered the loop")
+                #print("Just enetered the loop")
                 observations = [info["feedback"] for info in infos["infos"]]
                 info_for_agent = [info for info in infos["infos"]]
                 observation_strings, current_triplets, action_candidate_list, dict_info_for_agent, _, current_game_facts = self.agent.get_game_info_at_certain_step_maml(info_for_agent, prev_actions=chosen_actions, prev_facts=None)
-                print("Hey after get game info")
+                #print("Hey after get game info")
                 observation_strings = [item + " <sep> " + a for item, a in zip(observation_strings, chosen_actions)]
-                print("just before acting")
+                #print("just before acting")
                 value, chosen_actions, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list)
-                print("after acting")
+                #print("after acting")
                 chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
                 chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(dict_info_for_agent["admissible_commands"], chosen_indices, dones)]
-                print(chosen_actions_before_parsing)
-                print(chosen_indices)
-                print("after choosing actions")
+                #print(chosen_actions_before_parsing)
+                #print(chosen_indices)
+                #print("after choosing actions")
                 ######
                 # TODO:
                 # observations_tensor = torch.from_numpy(observations) ## Do we realy want numpy? If so, i will need to demarcate inside the agent.act and essentialy write the function explicitly write here--easy
@@ -411,7 +411,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
                 break
 
             index, task, kwargs = data
-            print(data)
+            #print(data)
             self.envs.reset_task(task)
             self.sample(index, **kwargs)
             self.task_queue.task_done()

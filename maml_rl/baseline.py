@@ -55,6 +55,8 @@ class LinearFeatureBaseline(nn.Module):
     def _tw_feature(self, episodes):
         ep_obs_str = episodes.observations
         ep_triplets = episodes.triplets
+        ep_lengths = episodes.lengths
+        max_ep_length = len(episodes)
         ep_h_og = []
         ep_obs_mask = []
         ep_h_go = []
@@ -62,12 +64,18 @@ class LinearFeatureBaseline(nn.Module):
         for i in range(episodes.batch_size):
             h_og, obs_mask, h_go, node_mask = self.agent.encode(ep_obs_str[i], ep_triplets[i], use_model="policy")
             #ep_h_og.append(h_og.unsqueeze(0))
+
+            h_go = F.pad(h_go, (0, 0, 0, 0, 0, max_ep_length-ep_lengths[i])) # hardcoded not only for graph input--but for padding too--suggestions?
+            node_mask = F.pad(node_mask, (0, 0, 0, max_ep_length-ep_lengths[i]))
             ep_h_go.append(h_go.unsqueeze(0))
             #ep_obs_mask.append(obs_mask.unsqueeze(0))
             ep_node_mask.append(node_mask.unsqueeze(0))
         print("in twfeature")
         print(len(ep_h_go))
         print(len(ep_h_go[0]))
+        print('ep_lengths : ' + str(ep_lengths))
+        xx = [elem.shape for elem in ep_h_go]
+        print(xx)
         print(h_go.shape)
         print(torch.cat(ep_h_go, 0).shape)
         if self.agent.policy_net.enable_text_input==False:

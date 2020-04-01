@@ -59,8 +59,8 @@ class BatchEpisodes(object):
             del self._observations_list'''
         if self._observations is None:
             self._observations = self._observations_list
-            print(len(self._observations))
-            print(len(self._observations[0]))
+            #print(len(self._observations))
+            #print(len(self._observations[0]))
             del self._observations_list
         return self._observations
 
@@ -163,7 +163,7 @@ class BatchEpisodes(object):
             self._actions_list[batch_id].append(action)
             self._chosen_indices_list[batch_id].append(chosen_index)
             self._rewards_list[batch_id].append(reward.astype(np.float32))
-            print("in appeend")
+            #print("in appeend")
 
     @property
     def logs(self):
