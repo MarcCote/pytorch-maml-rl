@@ -74,14 +74,27 @@ class MAMLTRPO(GradientBasedMetaLearner):
     def hessian_vector_product(self, kl, damping=1e-2):
         grads = torch.autograd.grad(kl,
                                     self.agent.policy_net.parameters(), # self.policy.parameters(),
-                                    create_graph=True)
+                                    create_graph=True, allow_unused=True)
+        non_none_grads = []
+        for elem in grads:
+             if elem is not None:
+                 non_none_grads.append(elem.contiguous())
+        grads = tuple(non_none_grads)
         flat_grad_kl = parameters_to_vector(grads)
 
         def _product(vector, retain_graph=True):
             grad_kl_v = torch.dot(flat_grad_kl, vector)
             grad2s = torch.autograd.grad(grad_kl_v,
                                          self.agent.policy_net.parameters(), #self.policy.parameters(),
-                                         retain_graph=retain_graph)
+                                         retain_graph=retain_graph, allow_unused=True)
+            non_none_grad2s = []
+            for elem in grad2s:
+                if elem is not None:
+                    non_none_grad2s.append(elem.contiguous())
+            grad2s = tuple(non_none_grad2s)
+            #print('grad2s')
+            #print(grad2s)
+
             flat_grad2_kl = parameters_to_vector(grad2s)
 
             return flat_grad2_kl + damping * vector
@@ -201,8 +214,15 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
         old_loss = sum(old_losses) / num_tasks
         grads = torch.autograd.grad(old_loss,
-                                    self.policy.parameters(),
-                                    retain_graph=True)
+                                    self.agent.policy_net.parameters(),
+                                    retain_graph=True, allow_unused=True)
+        non_none_grads = []
+        for elem in grads:
+            if elem is not None:
+                non_none_grads.append(elem.contiguous())
+        grads = tuple(non_none_grads)
+        #print("Type of grads")
+        #print(grads)
         grads = parameters_to_vector(grads)
 
         # Compute the step direction with Conjugate Gradient
@@ -221,13 +241,13 @@ class MAMLTRPO(GradientBasedMetaLearner):
         step = stepdir / lagrange_multiplier
 
         # Save the old parameters
-        old_params = parameters_to_vector(self.policy.parameters())
+        old_params = parameters_to_vector(self.agent.policy_net.parameters())
 
         # Line search
         step_size = 1.0
         for _ in range(ls_max_steps):
             vector_to_parameters(old_params - step_size * step,
-                                 self.policy.parameters())
+                                 self.agent.policy_net.parameters())
 
             losses, kls, _ = self._async_gather([
                 self.surrogate_loss(train, valid, old_pi=old_pi)
@@ -242,6 +262,6 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 break
             step_size *= ls_backtrack_ratio
         else:
-            vector_to_parameters(old_params, self.policy.parameters())
+            vector_to_parameters(old_params, self.agent.policy_net.parameters())
 
         return logs
