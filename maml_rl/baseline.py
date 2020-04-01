@@ -70,14 +70,14 @@ class LinearFeatureBaseline(nn.Module):
             ep_h_go.append(h_go.unsqueeze(0))
             #ep_obs_mask.append(obs_mask.unsqueeze(0))
             ep_node_mask.append(node_mask.unsqueeze(0))
-        print("in twfeature")
-        print(len(ep_h_go))
-        print(len(ep_h_go[0]))
-        print('ep_lengths : ' + str(ep_lengths))
+        #print("in twfeature")
+        #print(len(ep_h_go))
+        #print(len(ep_h_go[0]))
+        #print('ep_lengths : ' + str(ep_lengths))
         xx = [elem.shape for elem in ep_h_go]
-        print(xx)
-        print(h_go.shape)
-        print(torch.cat(ep_h_go, 0).shape)
+        #print(xx)
+        #print(h_go.shape)
+        #print(torch.cat(ep_h_go, 0).shape)
         if self.agent.policy_net.enable_text_input==False:
             return torch.cat(ep_h_go, 0), torch.cat(ep_node_mask, 0)
         elif self.agent.policy_net.enable_graph_input==False:
@@ -112,15 +112,15 @@ class LinearFeatureBaseline(nn.Module):
         #print(len(episodes.returns))
         #print(len(episodes.returns[0]))
         returns = episodes.returns.view(-1, 1)
-        print("RETRNS" + str(returns.shape))
+        #print("RETRNS" + str(returns.shape))
         reg_coeff = self._reg_coeff
         #flattened_masked_ep_h_og = masked_ep_h_og.view(masked_ep_h_og.shape[0], -1)
         #XT_y = torch.matmul(featmat.t(), returns)
         XT_y = torch.matmul(agg_ep_h_go.permute(1, 0), returns)
         #XT_X = torch.matmul(featmat.t(), featmat)
         XT_X = torch.matmul(agg_ep_h_go.permute(1, 0), agg_ep_h_go)
-        print(XT_y.shape)
-        print(XT_X.shape)
+        #print(XT_y.shape)
+        #print(XT_X.shape)
         for _ in range(5):
             try:
                 coeffs, _ = torch.lstsq(XT_y, XT_X + reg_coeff * self._eye)
@@ -142,7 +142,7 @@ class LinearFeatureBaseline(nn.Module):
         agg_masked_features = masked_mean(agg_masked_features, agg_node_masks) # bs * seq_len X block_hidden_dim
         values = torch.mv(agg_masked_features, self.weight)
         
-        print("baseline for")
-        print(values.shape)
-        print(self.weight.shape)
+        #print("baseline for")
+        #print(values.shape)
+        #print(self.weight.shape)
         return values.view(features.shape[:2])

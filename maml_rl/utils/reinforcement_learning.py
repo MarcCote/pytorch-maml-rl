@@ -85,7 +85,7 @@ def reinforce_loss(agent, episodes, params=None): # need to incorporate `params`
         #print('ULP-shape : ' + str(unpadded_log_probs.shape))
         #log_probs.append(pi.log_prob(torch.cat(chosen_indices[i])).reshape(len(episodes), -1))
     torch_log_probs = torch.cat(log_probs, 0).reshape(len(episodes), episodes.batch_size)
-    print(torch_log_probs.shape)
+    #print(torch_log_probs.shape)
     
     ## get obs, triplets, acl, meta_dones, step _ rewards
     #h_og, obs_mask, h_go, node_mask = agent.encode(observation_str, triplets, use_model="policy")
@@ -99,5 +99,5 @@ def reinforce_loss(agent, episodes, params=None): # need to incorporate `params`
 
     losses = -weighted_mean(torch_log_probs * episodes.advantages,
                             lengths=episodes.lengths)
-    print("about to exit reinforce loss : " + str(losses))
+    #print("about to exit reinforce loss : " + str(losses))
     return losses.mean()

@@ -143,7 +143,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 log_ratio = padded_new_log_prob - padded_old_log_prob
                 ratios.append(torch.exp(log_ratio))
                 kls.append(F.pad(kl_divergence(pi, old_pi_), (0, valid_max_eps_length-valid_episode_lengths[i])))
-                print('KLS')
+                #print('KLS')
                 #print(kls.shape)
 
             #print("KLS")

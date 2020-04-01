@@ -22,10 +22,13 @@ def _create_consumer(queue, futures, loop=None):
         loop = asyncio.get_event_loop()
     while True:
         data = queue.get()
+        print('Thread name : '+str(threading.currentThread().getName()))
         if data is None:
+            print('breaking from : '+ str(threading.currentThread().getName()))
             break
         import pdb
         #pdb.set_trace()
+        print("In Create Consumer ")
         index, step, episodes = data
         future = futures if (step is None) else futures[step]
         if not future[index].cancelled():
@@ -349,7 +352,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
     def sample_trajectories(self, params=None): # need to pass Agent() to the class?
         _ = self.envs.reset()
         _, _, dones, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
-        print("In st")
+        #print("In st")
         import pdb
         with torch.no_grad():
             ######
@@ -403,7 +406,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
     def run(self):
         while True:
             data = self.task_queue.get()
-            print("Hey from run sw")
+            #print("Hey from run sw")
             import pdb
             if data is None:
                 self.envs.close()
