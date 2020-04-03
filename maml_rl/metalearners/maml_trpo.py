@@ -124,7 +124,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
             valid_max_eps_length = len(valid_episodes)
 
             #old_log_probs, new_log_probs = [], []
-            ratios, kls = [], []
+            ratios, kls, old_pis_ = [], [], []
             for i in range(valid_episodes.batch_size):
                 h_og, obs_mask, h_go, node_mask = self.agent.encode(valid_obs_str[i], valid_triplets[i], use_model='policy')
                 action_features, value, action_masks, new_h, new_c = self.agent.action_scoring(valid_acl[i], h_og, obs_mask, h_go, node_mask, use_model='policy')
@@ -134,12 +134,16 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 #print(action_features)
 
                 pi = self.agent.policy_net.dist(probs=action_features)
+                print("OLD pi : ")
+                print(old_pi)
                 if old_pi is None:
                     old_pi_ = detach_distribution(pi)
                 else:
-                    old_pi_ = old_pi
+                    old_pi_ = old_pi[i]
 
                 for j in range(len(valid_chosen_indices[i])):
+                    if len(valid_chosen_indices[i][j].shape)==1:
+                        continue
                     valid_chosen_indices[i][j] = valid_chosen_indices[i][j].unsqueeze(0)
 
                 #new_log_prob = pi.log_prob(torch.cat(valid_chosen_indices[i])).reshape(len(valid_episodes), -1)
@@ -156,6 +160,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 log_ratio = padded_new_log_prob - padded_old_log_prob
                 ratios.append(torch.exp(log_ratio))
                 kls.append(F.pad(kl_divergence(pi, old_pi_), (0, valid_max_eps_length-valid_episode_lengths[i])))
+                old_pis_.append(old_pi_)
                 #print('KLS')
                 #print(kls.shape)
 
@@ -169,7 +174,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
             losses = -weighted_mean(torch_ratios * valid_episodes.advantages, lengths=valid_episodes.lengths)
 
             kls = weighted_mean(torch_kls, lengths=valid_episodes.lengths)
-            old_pi = old_pi_
+            old_pis = old_pis_
 
             '''#return losses.mean(), kls.mean(), old_pi
                 
@@ -217,8 +222,11 @@ class MAMLTRPO(GradientBasedMetaLearner):
                                     self.agent.policy_net.parameters(),
                                     retain_graph=True, allow_unused=True)
         non_none_grads = []
-        for elem in grads:
+        non_none_indices = []
+        for i in range(len(grads)):
+            elem = grads[i]
             if elem is not None:
+                non_none_indices.append(i)
                 non_none_grads.append(elem.contiguous())
         grads = tuple(non_none_grads)
         #print("Type of grads")
@@ -240,14 +248,24 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
         step = stepdir / lagrange_multiplier
 
+        non_none_params = []
+        for i, param in enumerate(self.agent.policy_net.parameters()):
+            if i in non_none_indices:
+                non_none_params.append(param.contiguous())
+
         # Save the old parameters
-        old_params = parameters_to_vector(self.agent.policy_net.parameters())
+        old_params = parameters_to_vector(non_none_params)
+        print("OLD PARAMS shape")
+        print(old_params.shape)
+        print(len(step))
+        print(len(non_none_indices))
+        print(type(self.agent.policy_net.parameters()))
 
         # Line search
         step_size = 1.0
         for _ in range(ls_max_steps):
             vector_to_parameters(old_params - step_size * step,
-                                 self.agent.policy_net.parameters())
+                                 non_none_params) #self.agent.policy_net.parameters())
 
             losses, kls, _ = self._async_gather([
                 self.surrogate_loss(train, valid, old_pi=old_pi)
@@ -262,6 +280,6 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 break
             step_size *= ls_backtrack_ratio
         else:
-            vector_to_parameters(old_params, self.agent.policy_net.parameters())
+            vector_to_parameters(old_params, non_none_params)
 
         return logs
