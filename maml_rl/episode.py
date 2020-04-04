@@ -173,13 +173,13 @@ class BatchEpisodes(object):
         self._logs[key] = value
 
     def compute_advantages(self, baseline, gae_lambda=1.0, normalize=True):
-        print("maks-shape" + str(self.mask.shape))
+        #print("maks-shape" + str(self.mask.shape))
         # Compute the values based on the baseline
         values = baseline(self).detach().t() # not sure if this should be reshaped/ t()
         # Add an additional 0 at the end of values for
         # the estimation at the end of the episode
-        print("values shape" + str(values.shape))
-        print("rewards shape "  + str(self.rewards.shape))
+        #print("values shape" + str(values.shape))
+        #print("rewards shape "  + str(self.rewards.shape))
         values = F.pad(values * self.mask, (0, 0, 0, 1))
 
         # Compute the advantages based on the values

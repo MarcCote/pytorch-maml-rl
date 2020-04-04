@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 import torch.nn.functional as F
 from torch.nn.utils.convert_parameters import parameters_to_vector
@@ -109,6 +111,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
             valid_episodes = await valid_futures
             if params is not None: # can make a function
                 model_dict = self.agent.policy_net.state_dict()
+                old_model_dict = deepcopy(model_dict)
                 inner_loop_params = {k: v for k, v in params.items() if k in model_dict}
                 model_dict.update(inner_loop_params)
                 self.agent.policy_net.load_state_dict(model_dict)
@@ -134,8 +137,8 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 #print(action_features)
 
                 pi = self.agent.policy_net.dist(probs=action_features)
-                print("OLD pi : ")
-                print(old_pi)
+                #print("OLD pi : ")
+                #print(old_pi)
                 if old_pi is None:
                     old_pi_ = detach_distribution(pi)
                 else:
@@ -175,6 +178,8 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
             kls = weighted_mean(torch_kls, lengths=valid_episodes.lengths)
             old_pis = old_pis_
+            if params is not None:
+                self.agent.policy_net.load_state_dict(old_model_dict) # Reload
 
             '''#return losses.mean(), kls.mean(), old_pi
                 
@@ -196,7 +201,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
             kls = weighted_mean(kl_divergence(pi, old_pi),
                                 lengths=valid_episodes.lengths)'''
 
-        return losses.mean(), kls.mean(), old_pi
+        return losses.mean(), kls.mean(), old_pis
 
     def step(self,
              train_futures,
@@ -255,17 +260,19 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
         # Save the old parameters
         old_params = parameters_to_vector(non_none_params)
-        print("OLD PARAMS shape")
-        print(old_params.shape)
-        print(len(step))
-        print(len(non_none_indices))
-        print(type(self.agent.policy_net.parameters()))
+        #print("OLD PARAMS shape")
+        #print(old_params.shape)
+        #print(len(step))
+        #print(len(non_none_indices))
+        #print(type(self.agent.policy_net.parameters()))
 
         # Line search
         step_size = 1.0
+        print("OLD PIS")
+        print(old_pis)
         for _ in range(ls_max_steps):
             vector_to_parameters(old_params - step_size * step,
-                                 non_none_params) #self.agent.policy_net.parameters())
+                                 self.agent.policy_net.parameters(), indices=non_none_indices) #self.agent.policy_net.parameters())
 
             losses, kls, _ = self._async_gather([
                 self.surrogate_loss(train, valid, old_pi=old_pi)
@@ -280,6 +287,6 @@ class MAMLTRPO(GradientBasedMetaLearner):
                 break
             step_size *= ls_backtrack_ratio
         else:
-            vector_to_parameters(old_params, non_none_params)
+            vector_to_parameters(old_params, self.agent.policy_net.parameters(), indices=non_none_indices)
 
         return logs

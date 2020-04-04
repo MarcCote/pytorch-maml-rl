@@ -23,13 +23,13 @@ def _create_consumer(queue, futures, loop=None):
         loop = asyncio.get_event_loop()
     while True:
         data = queue.get()
-        print('Thread name : '+str(threading.currentThread().getName()))
+        #print('Thread name : '+str(threading.currentThread().getName()))
         if data is None:
-            print('breaking from : '+ str(threading.currentThread().getName()))
+            #print('breaking from : '+ str(threading.currentThread().getName()))
             break
         import pdb
         #pdb.set_trace()
-        print("In Create Consumer ")
+        #print("In Create Consumer ")
         index, step, episodes = data
         future = futures if (step is None) else futures[step]
         if not future[index].cancelled():
@@ -327,7 +327,10 @@ class SamplerWorker(mp.Process): # need to pass the agent
         episodes.log('process_name', self.name)
 
         t0 = time.time()
-        print("create episode")
+        #print("create episode")
+        if params is not None:
+            old_params = self.agent.policy_net.state_dict()
+            self.agent.policy_net.load_state_dict(params, strict=False)
         for item in self.sample_trajectories(params=params):
             episodes.append(*item)
             #print("obs len")
@@ -347,10 +350,12 @@ class SamplerWorker(mp.Process): # need to pass the agent
         episodes.compute_advantages(self.baseline,
                                     gae_lambda=gae_lambda,
                                     normalize=True)
+        if params is not None:
+            self.agent.policy_net.load_state_dict(old_params) # hope there is no race condition here! NOTE: strict=True
         #print("I just computed the ads")
         return episodes
 
-    def sample_trajectories(self, params=None): # need to pass Agent() to the class?
+    def sample_trajectories(self, params=None): # need to pass Agent() to the class? # need to incorporate params for valid_trajs
         _ = self.envs.reset()
         _, _, dones, infos = self.envs.step(["tw-reset"] * self.batch_size)  # HACK: since reset doesn't return `infos`.
         #print("In st")
@@ -382,7 +387,7 @@ class SamplerWorker(mp.Process): # need to pass the agent
                 #print("Hey after get game info")
                 observation_strings = [item + " <sep> " + a for item, a in zip(observation_strings, chosen_actions)]
                 #print("just before acting")
-                value, chosen_actions, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list)
+                value, chosen_actions, action_log_probs, chosen_indices, _, prev_h, prev_c = self.agent.act(observation_strings, current_triplets, action_candidate_list) ## incorporate params
                 #print("after acting")
                 chosen_actions = [(action if not done else "restart") for done, action in zip(dones, chosen_actions)]
                 chosen_actions_before_parsing = [(item[idx] if not done else "*restart*") for item, idx, done in zip(dict_info_for_agent["admissible_commands"], chosen_indices, dones)]

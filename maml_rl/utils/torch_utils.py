@@ -57,15 +57,24 @@ def to_numpy(tensor):
     else:
         raise NotImplementedError()
 
-def vector_to_parameters(vector, parameters):
+def vector_to_parameters(vector, parameters, indices=None):
     param_device = None
 
     pointer = 0
-    for param in parameters:
-        param_device = _check_param_device(param, param_device)
+    if indices is None:
+        for param in parameters:
+            param_device = _check_param_device(param, param_device)
 
-        num_param = param.numel()
-        param.data.copy_(vector[pointer:pointer + num_param]
-                         .view_as(param).data)
+            num_param = param.numel()
+            param.data.copy_(vector[pointer:pointer + num_param]
+                             .view_as(param).data)
 
-        pointer += num_param
+            pointer += num_param
+    else:
+        i = 0
+        for k,param in enumerate(parameters):
+            if k in indices:
+                param_device = _check_param_device(param, param_device)
+                num_param = param.numel()
+                param.data.copy_(vector[pointer:pointer + num_param]
+                             .view_as(param).data) 
