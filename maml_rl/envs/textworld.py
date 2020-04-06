@@ -52,6 +52,7 @@ class TextworldEnv(gym.Env):
         """
         self.just_been_reset = False
         self.gamefiles = gamefiles
+        self._gamefiles = list(self.gamefiles)  # Used to shuffle the ordering.
         self.request_infos = request_infos or EnvInfos()
         self.request_infos.feedback = True
         self.seed(1234)
@@ -77,17 +78,22 @@ class TextworldEnv(gym.Env):
         Returns:
             All the seeds used to set this environment's random generator(s).
         """
-        # We shuffle the order in which the game will be seen.
-        rng = np.random.RandomState(seed)
-        gamefiles = list(self.gamefiles)  # Soft copy to avoid shuffling original list.
-        rng.shuffle(gamefiles)
 
-        # Prepare iterator used for looping through the games.
-        self._gamefiles_iterator = shuffled_cycle(gamefiles, rng=rng)
+        # We shuffle the order in which the game will be seen.
+        self._rng_gamefile = np.random.RandomState(seed)
+        self._gamefiles = list(self.gamefiles)  # Soft copy to avoid shuffling original list.
+        self._rng_gamefile.shuffle(self._gamefiles)
         return [seed]
 
     def sample_tasks(self, num_tasks):
-        gamefiles = [next(self._gamefiles_iterator) for _ in range(num_tasks)]
+        # Check if we need more gamefiles than what remains in self._gamefiles.
+        while num_tasks > len(self._gamefiles):  # Not enough gamefiles.
+            gamefiles = list(self.gamefiles)  # Soft copy to avoid shuffling original list.
+            self._rng_gamefile.shuffle(gamefiles)
+            self._gamefiles += gamefiles  # Append shuffled gamefiles to iterate through.
+
+        #gamefiles = [next(self._gamefiles_iterator) for _ in range(num_tasks)]
+        gamefiles = [self._gamefiles.pop() for _ in range(num_tasks)]
         tasks = [{'gamefile': gamefile} for gamefile in gamefiles]
         return tasks
 
