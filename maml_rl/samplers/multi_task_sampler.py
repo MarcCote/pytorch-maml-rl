@@ -1,5 +1,7 @@
 import torch
 import torch.multiprocessing as mp
+#import torch.multiprocessing
+#import multiprocessing.dummy as mp
 import asyncio
 import threading
 import time
@@ -310,18 +312,22 @@ class SamplerWorker(mp.Process):
         with torch.no_grad():
             while not self.envs.dones.all():
                 observations = [info["feedback"] for info in infos["infos"]]
+                admissible_commands = [info["admissible_commands"] for info in infos["infos"]]
+                pi = self.policy(observations, params=params)
+                actions_tensor = pi.sample()
+                actions = actions_tensor.cpu().numpy()
+                observations = self.policy.word_ids.detach()
+                observations_embed = self.policy.X_embed.detach()
 
                 # TODO:
                 # observations_tensor = torch.from_numpy(observations)
-                # pi = self.policy(observations_tensor, params=params)
-                # actions_tensor = pi.sample()
-                # actions = actions_tensor.cpu().numpy()
-                actions = ["look"] * self.batch_size
+                # actions = ["look"] * self.batch_size
+                commands = [cmds[min(idx, len(cmds)-1)] for idx, cmds in zip(actions, admissible_commands)]
 
-                new_observations, rewards, _, infos = self.envs.step(actions)
+                _, rewards, _, infos = self.envs.step(commands)
                 batch_ids = infos['batch_ids']
-                yield (observations, actions, rewards, batch_ids)
-                observations = new_observations
+                yield ((observations, observations_embed), actions, rewards, batch_ids)
+                #observations = new_observations
 
     def run(self):
         while True:

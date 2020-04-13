@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 
 from maml_rl.utils.torch_utils import weighted_normalize
 
@@ -11,6 +12,7 @@ class BatchEpisodes(object):
         self.device = device
 
         self._observations_list = [[] for _ in range(batch_size)]
+        self._observations_embed_list = [[] for _ in range(batch_size)]
         self._actions_list = [[] for _ in range(batch_size)]
         self._rewards_list = [[] for _ in range(batch_size)]
 
@@ -18,6 +20,7 @@ class BatchEpisodes(object):
         self._action_shape = None
 
         self._observations = None
+        self._observations_embed = None
         self._actions = None
         self._rewards = None
         self._returns = None
@@ -41,17 +44,22 @@ class BatchEpisodes(object):
     @property
     def observations(self):
         if self._observations is None:
-            observation_shape = self._observations_list[0][0].shape
-            observations = np.zeros((len(self), self.batch_size) + observation_shape,
-                                    dtype=np.float32)
-            for i in range(self.batch_size):
-                length = self.lengths[i]
-                np.stack(self._observations_list[i],
-                         axis=0,
-                         out=observations[:length, i])
-            self._observations = torch.as_tensor(observations, device=self.device)
+            observations = [pad_sequence(self._observations_list[i], batch_first=True) for i in range(self.batch_size)]
+            padded_observations = pad_sequence(observations, batch_first=False)
+            self._observations = torch.as_tensor(padded_observations, device=self.device)
             del self._observations_list
+
         return self._observations
+
+    @property
+    def observations_embed(self):
+        if self._observations_embed is None:
+            observations = [pad_sequence(self._observations_embed_list[i], batch_first=True) for i in range(self.batch_size)]
+            padded_observations = pad_sequence(observations, batch_first=False)
+            self._observations_embed = torch.as_tensor(padded_observations, device=self.device)
+            del self._observations_embed_list
+
+        return self._observations_embed
 
     @property
     def actions(self):
@@ -107,14 +115,15 @@ class BatchEpisodes(object):
         return self._advantages
 
     def append(self, observations, actions, rewards, batch_ids):
-        for observation, action, reward, batch_id in zip(
-                observations, actions, rewards, batch_ids):
+        for observation, observation_embed, action, reward, batch_id in zip(
+                observations[0], observations[1], actions, rewards, batch_ids):
             if batch_id is None:
                 continue
             # self._observations_list[batch_id].append(observation.astype(np.float32))
             # self._actions_list[batch_id].append(action.astype(np.float32))
             # self._rewards_list[batch_id].append(reward.astype(np.float32))
             self._observations_list[batch_id].append(observation)
+            self._observations_embed_list[batch_id].append(observation_embed)
             self._actions_list[batch_id].append(action)
             self._rewards_list[batch_id].append(reward.astype(np.float32))
 
